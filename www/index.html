@@ -40,8 +40,8 @@
     <p id="hero-sub">별빛이 당신의 길을 안내합니다</p>
   </section>
 
-  <!-- Mode Selection -->
-  <div class="modes">
+  <!-- Mode Selection (로그인 후 표시) -->
+  <div class="modes" style="display:none">
     <div class="mode-card active" id="mode-1card">
       <div class="mode-icon">🃏</div>
       <div class="mode-title" id="mode-1-title">오늘의 카드</div>
@@ -54,14 +54,14 @@
     </div>
   </div>
 
-  <!-- Question -->
-  <div class="question-wrap">
+  <!-- Question (로그인 후 표시) -->
+  <div class="question-wrap" style="display:none">
     <label id="q-label">질문이 있으신가요? (선택)</label>
     <input id="q-input" type="text" placeholder="마음속 질문을 적어주세요...">
   </div>
 
-  <!-- Draw Button -->
-  <button id="btn-draw" class="btn-draw">🔮 카드 뽑기</button>
+  <!-- Draw Button (로그인 후 표시) -->
+  <button id="btn-draw" class="btn-draw" style="display:none">🔮 카드 뽑기</button>
 
   <!-- Cards Stage -->
   <div id="stage" class="stage"></div>

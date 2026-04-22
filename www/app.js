@@ -87,6 +87,7 @@ let lang = 'ko';
 let mode = '1card';
 let drawnCards = [];
 let revealedCount = 0;
+let currentUser = null; // 로그인 상태 (비회원: null)
 
 // ── Client-side rate limit (mirrors server: 2회/3분) ──────────
 const CL_MAX    = 2;
@@ -174,6 +175,12 @@ function shuffle(arr) {
 }
 
 function drawCards() {
+  // 로그인 체크 — 비회원 차단
+  if (!currentUser) {
+    showLoginRequired();
+    return;
+  }
+
   // 버튼 잠금 중이면 실행 차단
   if (btnDraw.disabled) return;
 
@@ -578,6 +585,7 @@ fetch('/api/me')
   .then(r => r.json())
   .then(user => {
     if (user.loggedIn) {
+      currentUser = user; // 로그인 상태 저장
       // 헤더 사용자 정보
       authArea.innerHTML = `
         <div class="user-badge">
