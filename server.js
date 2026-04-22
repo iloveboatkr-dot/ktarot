@@ -49,20 +49,23 @@ app.use(express.static(path.join(__dirname, 'www')));
 
 // ── Passport Google OAuth ─────────────────────────────────────
 passport.use(new GoogleStrategy({
-  clientID:     process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL:  process.env.CALLBACK_URL,
-}, async (_accessToken, _refreshToken, profile, done) => {
+  clientID:          process.env.GOOGLE_CLIENT_ID,
+  clientSecret:      process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL:       process.env.CALLBACK_URL,
+  passReqToCallback: true,   // req 접근 허용
+}, async (req, _accessToken, _refreshToken, profile, done) => {
   try {
+    const mode = req.session.authMode || 'signup'; // 'login' 또는 'signup'
     let user = await User.findOne({ googleId: profile.id });
+
     if (user) {
       // 기존 유저 → 로그인 시 프로필 최신화
       user.lastLogin = new Date();
       user.avatar    = profile.photos?.[0]?.value || user.avatar;
       user.name      = profile.displayName || user.name;
       await user.save();
-    } else {
-      // 신규 유저 → DB에 저장
+    } else if (mode === 'signup') {
+      // 회원가입 모드 → 신규 생성
       user = await User.create({
         googleId: profile.id,
         name:     profile.displayName,
@@ -70,6 +73,10 @@ passport.use(new GoogleStrategy({
         avatar:   profile.photos?.[0]?.value || '',
       });
       console.log(`✨ 신규 가입: ${user.name} (${user.email})`);
+    } else {
+      // 로그인 모드인데 계정 없음 → 거부
+      console.log(`⚠️ 로그인 실패 (계정 없음): ${profile.displayName}`);
+      return done(null, false);
     }
     return done(null, user);
   } catch (err) {
@@ -109,13 +116,21 @@ const readLimiter = rateLimit({
 });
 
 // ── Auth Routes ───────────────────────────────────────────────
-app.get('/auth/google',
-  passport.authenticate('google', { scope: ['profile', 'email'] })
-);
+app.get('/auth/google', (req, res, next) => {
+  // mode 세션에 저장: 'login'(기존회원) 또는 'signup'(신규가입)
+  req.session.authMode = req.query.mode || 'signup';
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    prompt: 'select_account',  // 항상 구글 계정 선택 화면 표시
+  })(req, res, next);
+});
 
 app.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/' }),
-  (req, res) => res.redirect('/')
+  passport.authenticate('google', { failureRedirect: '/?error=notfound' }),
+  (req, res) => {
+    req.session.authMode = null;
+    res.redirect('/');
+  }
 );
 
 

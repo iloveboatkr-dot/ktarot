@@ -535,29 +535,49 @@ function showLoginRequired() {
   stage.innerHTML = '';
   resultWrap.classList.remove('visible');
 
+  // ?error=notfound 감지: 로그인 실패 (계정 없음)
+  const isNotFound = new URLSearchParams(location.search).get('error') === 'notfound';
+  if (isNotFound) history.replaceState({}, '', '/');
+
   // 로그인 유도 박스 삽입 (없으면)
   if (!document.getElementById('login-gate')) {
     const gate = document.createElement('div');
     gate.id = 'login-gate';
+
+    const googleSvg = `<svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+    </svg>`;
+
     gate.innerHTML = `
       <div class="login-gate-box">
         <div class="login-gate-orb">🔮</div>
         <h2 class="login-gate-title" id="lg-title">${t.loginRequired}</h2>
         <p class="login-gate-desc" id="lg-desc">${t.loginDesc}</p>
-        <a href="/auth/google" class="btn-google-lg" id="lg-btn">
-          <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-          </svg>
-          <span id="lg-btn-text">${t.loginBtn}</span>
-        </a>
+
+        ${isNotFound ? `
+        <div class="lg-error-box">
+          ⚠️ 등록된 계정이 없습니다.<br>
+          <small>탈퇴한 계정이거나 처음 방문하셨다면 <strong>회원가입</strong>을 해주세요.</small>
+        </div>` : ''}
+
+        <div class="lg-btn-group">
+          <a href="/auth/google?mode=signup" class="btn-google-lg" id="lg-btn">
+            ${googleSvg}
+            <span>Google로 회원가입</span>
+          </a>
+          <a href="/auth/google?mode=login" class="btn-login-only" id="lg-login-btn">
+            이미 회원이신가요? <strong>로그인</strong>
+          </a>
+        </div>
       </div>`;
     // 모드 카드 바로 아래 삽입
     tarotUI.insertAdjacentElement('afterend', gate);
   }
 }
+
 
 // 언어 변경 시 로그인 게이트 텍스트도 업데이트
 const origApplyLang = applyLang;
