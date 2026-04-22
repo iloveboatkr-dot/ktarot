@@ -56,10 +56,6 @@ passport.use(new GoogleStrategy({
   try {
     let user = await User.findOne({ googleId: profile.id });
     if (user) {
-      // 탈퇴한 계정이면 로그인 거부
-      if (user.withdrawn) {
-        return done(null, false, { message: 'withdrawn' });
-      }
       // 기존 유저 → 로그인 시 프로필 최신화
       user.lastLogin = new Date();
       user.avatar    = profile.photos?.[0]?.value || user.avatar;
@@ -118,7 +114,7 @@ app.get('/auth/google',
 );
 
 app.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/?withdrawn=1' }),
+  passport.authenticate('google', { failureRedirect: '/' }),
   (req, res) => res.redirect('/')
 );
 
@@ -142,14 +138,11 @@ app.get('/api/me', (req, res) => {
 app.delete('/api/delete-account', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: '로그인이 필요합니다.' });
   try {
-    const userId = req.user._id;
-    // 계정 삭제 대신 탈퇴 표시 (같은 Google ID로 재가입 차단)
-    await User.findByIdAndUpdate(userId, {
-      withdrawn:   true,
-      withdrawnAt: new Date(),
-      name:        '[탈퇴한 회원]',
-    });
-    console.log(`🗑️ 회원탈퇴: ${req.user.name} (${req.user.email})`);
+    const userName  = req.user.name;
+    const userEmail = req.user.email;
+    // DB에서 즉시 삭제 (재가입 가능)
+    await User.findByIdAndDelete(req.user._id);
+    console.log(`🗑️ 회원탈퇴(삭제): ${userName} (${userEmail})`);
     // 세션 완전 파기 + 로그아웃
     req.logout(() => {
       req.session.destroy(() => {

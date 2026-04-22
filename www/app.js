@@ -584,23 +584,6 @@ function showTarotUI() {
 fetch('/api/me')
   .then(r => r.json())
   .then(user => {
-    // URL에 ?withdrawn=1 이 있으면 탈퇴 완료 안내 표시
-    if (new URLSearchParams(location.search).get('withdrawn') === '1') {
-      history.replaceState({}, '', '/');
-      setTimeout(() => {
-        const gate = document.getElementById('login-gate');
-        if (gate) {
-          const notice = document.createElement('div');
-          notice.className = 'withdrawn-notice';
-          notice.innerHTML = `
-            <span class="wn-icon">✅</span>
-            <strong>회원탈퇴가 완료되었습니다.</strong>
-            <span>같은 계정으로 재가입이 제한됩니다.</span>`;
-          gate.insertBefore(notice, gate.firstChild);
-        }
-      }, 200);
-    }
-
     if (user.loggedIn) {
 
       currentUser = user; // 로그인 상태 저장
