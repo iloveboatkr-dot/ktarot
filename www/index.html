@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KTarot — AI 타로 리딩</title>
+  <meta name="description" content="AI가 해석하는 신비로운 타로 카드 리딩. 오늘의 카드와 과거·현재·미래 3카드 스프레드를 다국어로 제공합니다.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<canvas id="stars-canvas"></canvas>
+
+<div class="app">
+
+  <!-- Header -->
+  <header>
+    <div class="logo" id="logo" style="cursor:pointer">🔮 KTarot <span>AI</span></div>
+    <div class="header-right">
+      <div class="lang-btns">
+        <button class="lang-btn active" data-lang="ko">한국어</button>
+        <button class="lang-btn" data-lang="en">EN</button>
+        <button class="lang-btn" data-lang="ja">日本語</button>
+        <button class="lang-btn" data-lang="zh">中文</button>
+      </div>
+      <div id="auth-area">
+        <!-- JS로 채워짐 -->
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-orb">🔮</div>
+    <h1 class="hero-title">
+      <span class="ht-top">✦ The Cards ✦</span>
+      <span class="ht-main">Await</span>
+    </h1>
+    <div class="hero-stars">· · ✦ · ·</div>
+    <p id="hero-sub">별빛이 당신의 길을 안내합니다</p>
+  </section>
+
+  <!-- Mode Selection -->
+  <div class="modes">
+    <div class="mode-card active" id="mode-1card">
+      <div class="mode-icon">🃏</div>
+      <div class="mode-title" id="mode-1-title">오늘의 카드</div>
+      <div class="mode-desc"  id="mode-1-desc">오늘 하루를 위한 한 장의 카드</div>
+    </div>
+    <div class="mode-card" id="mode-3card">
+      <div class="mode-icon">🃏🃏🃏</div>
+      <div class="mode-title" id="mode-3-title">과거·현재·미래</div>
+      <div class="mode-desc"  id="mode-3-desc">세 장의 카드로 흐름을 읽다</div>
+    </div>
+  </div>
+
+  <!-- Question -->
+  <div class="question-wrap">
+    <label id="q-label">질문이 있으신가요? (선택)</label>
+    <input id="q-input" type="text" placeholder="마음속 질문을 적어주세요...">
+  </div>
+
+  <!-- Draw Button -->
+  <button id="btn-draw" class="btn-draw">🔮 카드 뽑기</button>
+
+  <!-- Cards Stage -->
+  <div id="stage" class="stage"></div>
+
+  <!-- AI Reading Result -->
+  <div id="result-wrap" class="result-wrap">
+    <div class="result-header">
+      <span>✦</span>
+      <h2 id="result-title">AI 타로 해석</h2>
+    </div>
+    <!-- 결과 카드 표시 -->
+    <div id="result-cards" class="result-cards"></div>
+    <!-- 로딩 -->
+    <div id="loading" class="loading-dots" style="display:none">
+      <span></span><span></span><span></span>
+    </div>
+    <!-- 리포트 박스 -->
+    <div class="report-box" id="report-box" style="display:none">
+      <div id="ai-report"></div>
+    </div>
+    <!-- 버튼 -->
+    <div class="result-btns">
+      <button id="btn-again" class="btn-again" style="display:none">↺</button>
+      <button id="btn-copy"  class="btn-copy"  style="display:none">📋</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="tarot_data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
