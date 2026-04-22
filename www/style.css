@@ -270,6 +270,23 @@ header {
 .wm-btn-confirm:hover { background: linear-gradient(135deg, #9a2020, #7a1010); box-shadow: 0 4px 16px rgba(180,30,30,.4); }
 .wm-btn-confirm:disabled { opacity: .5; cursor: not-allowed; }
 
+/* 탈퇴 완료 상태 */
+.wm-success-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  animation: bounceIn .4s ease;
+}
+@keyframes bounceIn {
+  0%   { transform: scale(0.5); opacity:0; }
+  70%  { transform: scale(1.15); opacity:1; }
+  100% { transform: scale(1); }
+}
+.wm-countdown {
+  font-size: .82rem;
+  color: var(--text-dim);
+  margin-top: 16px;
+  animation: pulse-stars 1.2s ease-in-out infinite;
+}
 
 /* ── Hero ── */
 .hero {

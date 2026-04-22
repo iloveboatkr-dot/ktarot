@@ -706,19 +706,47 @@ function hideWithdrawModal() {
 
 async function deleteAccount() {
   const confirmBtn = document.querySelector('.wm-btn-confirm');
+  const cancelBtn  = document.querySelector('.wm-btn-cancel');
   if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = '처리 중...'; }
+  if (cancelBtn)  { cancelBtn.style.display = 'none'; }
 
   try {
-    const res = await fetch('/api/delete-account', { method: 'DELETE' });
+    const res  = await fetch('/api/delete-account', { method: 'DELETE' });
     const data = await res.json();
+
     if (data.success) {
-      window.location.reload();
+      // ── 탈퇴 완료 화면으로 모달 내용 교체 ──
+      const box = document.querySelector('.wm-box');
+      if (box) {
+        box.innerHTML = `
+          <div class="wm-success-icon">✅</div>
+          <h3 class="wm-title" style="color:#88ffaa">탈퇴가 완료되었습니다</h3>
+          <p class="wm-desc">
+            계정 정보가 <strong style="color:#aaffcc">완전히 삭제</strong>되었습니다.<br>
+            KTarot를 이용해 주셔서 감사합니다 🔮
+          </p>
+          <p class="wm-countdown" id="wm-count">3초 후 자동으로 이동합니다...</p>`;
+      }
+      // 3초 카운트다운 후 이동
+      let sec = 3;
+      const timer = setInterval(() => {
+        sec--;
+        const el = document.getElementById('wm-count');
+        if (el) el.textContent = `${sec}초 후 자동으로 이동합니다...`;
+        if (sec <= 0) {
+          clearInterval(timer);
+          window.location.href = '/';
+        }
+      }, 1000);
+
     } else {
       alert(data.error || '탈퇴 처리 중 오류가 발생했습니다.');
       if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '탈퇴하기'; }
+      if (cancelBtn)  { cancelBtn.style.display = ''; }
     }
   } catch (e) {
     alert('네트워크 오류가 발생했습니다. 다시 시도해 주세요.');
     if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '탈퇴하기'; }
+    if (cancelBtn)  { cancelBtn.style.display = ''; }
   }
 }
