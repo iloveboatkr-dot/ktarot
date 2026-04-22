@@ -736,6 +736,79 @@ header {
 }
 .btn-login-only strong { color: var(--purple-l); }
 
+/* ── 이메일 로그인 섹션 ── */
+.lg-login-section {
+  margin-bottom: 8px;
+  text-align: left;
+}
+.lg-section-label {
+  font-size: .8rem;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  font-weight: 600;
+  letter-spacing: .5px;
+}
+.lg-email-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.lg-email-row input {
+  flex: 1;
+  background: rgba(26,14,48,.8);
+  border: 1px solid rgba(155,93,229,.3);
+  border-radius: 10px;
+  padding: 11px 14px;
+  color: var(--text);
+  font-size: .9rem;
+  outline: none;
+  transition: border .2s;
+}
+.lg-email-row input:focus { border-color: var(--purple-l); }
+.lg-email-row input::placeholder { color: #55447788; }
+.lg-email-row button {
+  background: linear-gradient(135deg, var(--purple), #4a1a8a);
+  color: var(--gold-l);
+  border: none;
+  border-radius: 10px;
+  padding: 11px 18px;
+  font-size: .88rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .2s;
+}
+.lg-email-row button:hover { filter: brightness(1.2); }
+.lg-email-row button:disabled { opacity: .5; cursor: not-allowed; }
+
+.lg-email-msg {
+  font-size: .82rem;
+  min-height: 18px;
+  line-height: 1.5;
+  padding: 0 2px;
+}
+.lg-email-msg.error { color: #ffaaaa; }
+.lg-email-msg.error small { color: var(--text-dim); }
+.lg-email-msg.error strong { color: #ffccaa; }
+.lg-email-msg.success { color: #88ffaa; }
+
+/* ── 구분선 ── */
+.lg-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0 16px;
+  color: var(--text-dim);
+  font-size: .8rem;
+}
+.lg-divider::before, .lg-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(155,93,229,.2);
+}
+
+
 /* 로그인 실패 오류 박스 */
 .lg-error-box {
   background: rgba(220,80,80,.1);

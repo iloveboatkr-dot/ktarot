@@ -528,23 +528,17 @@ const drawBtnWrap = document.getElementById('btn-draw');
 // 로그인 필요 화면
 function showLoginRequired() {
   const t = I18N[lang];
-  // 타로 UI 숨기기
   tarotUI.style.display = 'none';
   questionWrap.style.display = 'none';
   drawBtnWrap.style.display = 'none';
   stage.innerHTML = '';
   resultWrap.classList.remove('visible');
 
-  // ?error=notfound 감지: 로그인 실패 (계정 없음)
-  const isNotFound = new URLSearchParams(location.search).get('error') === 'notfound';
-  if (isNotFound) history.replaceState({}, '', '/');
-
-  // 로그인 유도 박스 삽입 (없으면)
   if (!document.getElementById('login-gate')) {
     const gate = document.createElement('div');
     gate.id = 'login-gate';
 
-    const googleSvg = `<svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    const googleSvg = `<svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
       <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
       <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
       <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
@@ -557,26 +551,76 @@ function showLoginRequired() {
         <h2 class="login-gate-title" id="lg-title">${t.loginRequired}</h2>
         <p class="login-gate-desc" id="lg-desc">${t.loginDesc}</p>
 
-        ${isNotFound ? `
-        <div class="lg-error-box">
-          ⚠️ 등록된 계정이 없습니다.<br>
-          <small>탈퇴한 계정이거나 처음 방문하셨다면 <strong>회원가입</strong>을 해주세요.</small>
-        </div>` : ''}
-
-        <div class="lg-btn-group">
-          <a href="/auth/google?mode=signup" class="btn-google-lg" id="lg-btn">
-            ${googleSvg}
-            <span>Google로 회원가입</span>
-          </a>
-          <a href="/auth/google?mode=login" class="btn-login-only" id="lg-login-btn">
-            이미 회원이신가요? <strong>로그인</strong>
-          </a>
+        <!-- ── 로그인 섹션 (이메일 먼저 확인) ── -->
+        <div class="lg-login-section">
+          <div class="lg-section-label">🔑 기존 회원 로그인</div>
+          <div class="lg-email-row">
+            <input type="email" id="lg-email" placeholder="가입한 이메일 주소" autocomplete="email" />
+            <button id="lg-login-btn" onclick="lgCheckAndLogin()">로그인</button>
+          </div>
+          <div id="lg-email-msg" class="lg-email-msg"></div>
         </div>
+
+        <!-- ── 구분선 ── -->
+        <div class="lg-divider"><span>또는</span></div>
+
+        <!-- ── 회원가입 ── -->
+        <div class="lg-section-label">✨ 신규 회원가입</div>
+        <a href="/auth/google?mode=signup" class="btn-google-lg" id="lg-btn">
+          ${googleSvg}
+          <span>Google로 회원가입</span>
+        </a>
       </div>`;
-    // 모드 카드 바로 아래 삽입
+
     tarotUI.insertAdjacentElement('afterend', gate);
+
+    // 엔터키로 로그인
+    document.getElementById('lg-email').addEventListener('keydown', e => {
+      if (e.key === 'Enter') lgCheckAndLogin();
+    });
   }
 }
+
+// 이메일 → DB 체크 → Google OAuth 로그인
+async function lgCheckAndLogin() {
+  const emailEl  = document.getElementById('lg-email');
+  const msgEl    = document.getElementById('lg-email-msg');
+  const loginBtn = document.getElementById('lg-login-btn');
+  const email = emailEl?.value.trim();
+
+  if (!email) {
+    if (msgEl) { msgEl.textContent = '이메일을 입력해 주세요.'; msgEl.className = 'lg-email-msg error'; }
+    return;
+  }
+
+  if (loginBtn) { loginBtn.disabled = true; loginBtn.textContent = '확인 중...'; }
+  if (msgEl)    { msgEl.textContent = ''; }
+
+  try {
+    const res  = await fetch(`/api/check-email?email=${encodeURIComponent(email)}`);
+    const data = await res.json();
+
+    if (data.exists) {
+      // DB에 계정 있음 → Google OAuth로 로그인 (이메일 힌트 포함)
+      if (msgEl) { msgEl.textContent = '계정을 확인했습니다. Google 로그인으로 이동합니다...'; msgEl.className = 'lg-email-msg success'; }
+      setTimeout(() => {
+        window.location.href = `/auth/google?mode=login&hint=${encodeURIComponent(email)}`;
+      }, 600);
+    } else {
+      // DB에 없음 → 가입 안내
+      if (msgEl) {
+        msgEl.innerHTML = '⚠️ 등록된 계정이 없습니다.<br><small>처음 방문하셨거나 탈퇴한 계정이면 <strong>회원가입</strong>을 해주세요.</small>';
+        msgEl.className = 'lg-email-msg error';
+      }
+      if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = '로그인'; }
+    }
+  } catch (e) {
+    if (msgEl) { msgEl.textContent = '네트워크 오류가 발생했습니다.'; msgEl.className = 'lg-email-msg error'; }
+    if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = '로그인'; }
+  }
+}
+
+
 
 
 // 언어 변경 시 로그인 게이트 텍스트도 업데이트

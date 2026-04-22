@@ -116,13 +116,29 @@ const readLimiter = rateLimit({
 });
 
 // ── Auth Routes ───────────────────────────────────────────────
+
+// 이메일로 회원 존재 여부 사전 확인 (로그인 전 DB 체크)
+app.get('/api/check-email', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) return res.json({ exists: false });
+    const user = await User.findOne({ email: email.trim().toLowerCase() });
+    res.json({ exists: !!user });
+  } catch (err) {
+    res.json({ exists: false });
+  }
+});
+
 app.get('/auth/google', (req, res, next) => {
-  // mode 세션에 저장: 'login'(기존회원) 또는 'signup'(신규가입)
+  // mode 세션에 저장: 'login'(기존회원만) 또는 'signup'(신규가입)
   req.session.authMode = req.query.mode || 'signup';
-  passport.authenticate('google', {
+  const opts = {
     scope: ['profile', 'email'],
-    prompt: 'select_account',  // 항상 구글 계정 선택 화면 표시
-  })(req, res, next);
+    prompt: 'select_account',  // 항상 계정 선택 화면
+  };
+  // 이메일 힌트가 있으면 Google 화면에 자동 입력
+  if (req.query.hint) opts.loginHint = req.query.hint;
+  passport.authenticate('google', opts)(req, res, next);
 });
 
 app.get('/auth/google/callback',
