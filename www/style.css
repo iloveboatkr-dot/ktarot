@@ -78,34 +78,122 @@ header {
 }
 .btn-google-sm:hover { background: #f0f0f0; box-shadow: 0 4px 12px rgba(0,0,0,.4); transform: translateY(-1px); }
 
-/* ── 로그인 후 유저 배지 ── */
-.user-badge { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.user-avatar { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--purple-l); object-fit: cover; }
+/* ── 로그인 후 유저 배지 (클릭 가능) ── */
+.user-badge {
+  display: flex; align-items: center; gap: 7px;
+  cursor: pointer; border-radius: 24px;
+  padding: 5px 10px 5px 5px;
+  border: 1px solid transparent;
+  transition: all .2s;
+  user-select: none;
+}
+.user-badge:hover {
+  background: rgba(155,93,229,.12);
+  border-color: rgba(155,93,229,.3);
+}
+.user-avatar { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--purple-l); object-fit: cover; }
 .user-name { font-size: .82rem; color: var(--gold-l); font-weight: 500; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.btn-logout-sm {
-  background: transparent; border: 1px solid rgba(255,100,100,.4);
-  color: #ff8888; border-radius: 20px;
-  padding: 4px 10px; font-size: .75rem;
+.profile-chevron { font-size: .65rem; color: var(--text-dim); transition: transform .2s; }
+
+/* ── 프로필 드롭다운 패널 ── */
+#profile-panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 260px;
+  background: linear-gradient(145deg, #1c0d33, #120820);
+  border: 1px solid rgba(155,93,229,.4);
+  border-radius: 16px;
+  padding: 24px 20px 16px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.6), 0 0 40px rgba(108,61,171,.15);
+  z-index: 1000;
+  animation: fadeUp .2s ease;
+}
+#profile-panel.open { display: block; }
+
+/* 아바타 영역 */
+.pp-avatar-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  margin-bottom: 14px; gap: 8px;
+}
+.pp-avatar {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  border: 3px solid var(--purple-l);
+  object-fit: cover;
+  box-shadow: 0 0 20px rgba(155,93,229,.45);
+}
+.pp-google-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: .72rem; color: #ccc;
+}
+
+/* 이름 / 이메일 */
+.pp-name {
+  text-align: center;
+  font-size: .95rem; font-weight: 600;
+  color: var(--gold-l);
+  margin-bottom: 4px;
+}
+.pp-email {
+  text-align: center;
+  font-size: .75rem; color: var(--text-dim);
+  margin-bottom: 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.pp-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(155,93,229,.3), transparent);
+  margin: 14px 0 12px;
+}
+
+/* 로그아웃 버튼 */
+.pp-btn-logout {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid rgba(155,93,229,.3);
+  color: var(--text-dim);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: .88rem;
   text-decoration: none; cursor: pointer;
   transition: all .2s;
-}
-.btn-logout-sm:hover { background: rgba(255,100,100,.1); }
-
-/* 회원탈퇴 버튼 (헤더) */
-.btn-withdraw-sm {
-  background: transparent;
-  border: 1px solid rgba(180,60,60,.35);
-  color: rgba(255,120,120,.6);
-  border-radius: 20px;
-  padding: 4px 10px; font-size: .72rem;
-  cursor: pointer; transition: all .2s;
+  margin-bottom: 8px;
   font-family: inherit;
 }
-.btn-withdraw-sm:hover {
-  background: rgba(180,60,60,.15);
-  border-color: rgba(255,100,100,.6);
+.pp-btn-logout:hover {
+  background: rgba(155,93,229,.1);
+  border-color: rgba(155,93,229,.5);
+  color: var(--text);
+}
+
+/* 회원탈퇴 버튼 (패널 내) */
+.pp-btn-withdraw {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid rgba(180,40,40,.3);
+  color: rgba(255,110,110,.55);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: .85rem;
+  cursor: pointer; transition: all .2s;
+  font-family: inherit;
+  text-align: left;
+}
+.pp-btn-withdraw:hover {
+  background: rgba(180,40,40,.12);
+  border-color: rgba(220,80,80,.5);
   color: #ff8888;
 }
+
 
 /* ── 회원탈퇴 확인 모달 ── */
 #withdraw-modal {

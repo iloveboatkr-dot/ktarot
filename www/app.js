@@ -586,15 +586,15 @@ fetch('/api/me')
   .then(user => {
     if (user.loggedIn) {
       currentUser = user; // 로그인 상태 저장
-      // 헤더 사용자 정보
+      // 헤더: 클릭 가능한 아바타 + 이름만 표시
       authArea.innerHTML = `
-        <div class="user-badge">
+        <div class="user-badge" id="profile-trigger" onclick="toggleProfilePanel()" title="프로필 보기">
           <img src="${user.avatar}" alt="${user.name}" class="user-avatar" onerror="this.style.display='none'">
           <span class="user-name">${user.name}</span>
-          <a href="/logout" class="btn-logout-sm">로그아웃</a>
-          <button class="btn-withdraw-sm" onclick="showWithdrawModal()">회원탈퇴</button>
+          <span class="profile-chevron">▾</span>
         </div>`;
       showTarotUI();
+      injectProfilePanel(user);
       injectWithdrawModal();
     } else {
       // 헤더 로그인 버튼
@@ -615,6 +615,62 @@ fetch('/api/me')
     // 네트워크 오류 시 안전하게 로그인 요구
     showLoginRequired();
   });
+
+// ── 프로필 드롭다운 패널 ──────────────────────────────────────
+function injectProfilePanel(user) {
+  if (document.getElementById('profile-panel')) return;
+  const panel = document.createElement('div');
+  panel.id = 'profile-panel';
+  panel.innerHTML = `
+    <div class="pp-avatar-wrap">
+      <img src="${user.avatar}" alt="${user.name}" class="pp-avatar" onerror="this.style.display='none'">
+      <div class="pp-google-badge">
+        <svg width="14" height="14" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+        </svg>
+        Google 계정
+      </div>
+    </div>
+    <div class="pp-name">${user.name}</div>
+    <div class="pp-email">${user.email}</div>
+    <div class="pp-divider"></div>
+    <a href="/logout" class="pp-btn-logout">
+      <span>🚪</span> 로그아웃
+    </a>
+    <button class="pp-btn-withdraw" onclick="hideProfilePanel(); showWithdrawModal();">
+      <span>⚠️</span> 회원탈퇴
+    </button>`;
+  // 헤더 auth-area 바로 아래에 삽입
+  document.getElementById('auth-area').style.position = 'relative';
+  document.getElementById('auth-area').appendChild(panel);
+
+  // 외부 클릭 시 닫기
+  document.addEventListener('click', (e) => {
+    const trigger = document.getElementById('profile-trigger');
+    const pp = document.getElementById('profile-panel');
+    if (pp && trigger && !trigger.contains(e.target) && !pp.contains(e.target)) {
+      hideProfilePanel();
+    }
+  });
+}
+
+function toggleProfilePanel() {
+  const panel = document.getElementById('profile-panel');
+  const chevron = document.querySelector('.profile-chevron');
+  if (!panel) return;
+  const isOpen = panel.classList.toggle('open');
+  if (chevron) chevron.textContent = isOpen ? '▴' : '▾';
+}
+
+function hideProfilePanel() {
+  const panel = document.getElementById('profile-panel');
+  const chevron = document.querySelector('.profile-chevron');
+  if (panel) panel.classList.remove('open');
+  if (chevron) chevron.textContent = '▾';
+}
 
 // ── 회원탈퇴 모달 ─────────────────────────────────────────────
 function injectWithdrawModal() {
@@ -656,7 +712,6 @@ async function deleteAccount() {
     const res = await fetch('/api/delete-account', { method: 'DELETE' });
     const data = await res.json();
     if (data.success) {
-      // 탈퇴 완료 → 페이지 새로고침 (로그인 게이트 표시)
       window.location.reload();
     } else {
       alert(data.error || '탈퇴 처리 중 오류가 발생했습니다.');
