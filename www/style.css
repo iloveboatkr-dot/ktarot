@@ -409,9 +409,101 @@ header {
   box-shadow: 0 0 0 3px rgba(224,90,90,.25) !important;
 }
 
+/* ── Login Gate ── */
+#login-gate {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0 60px;
+  animation: fadeUp .5s ease;
+}
+
+.login-gate-box {
+  background: linear-gradient(135deg, rgba(26,14,48,.9), rgba(17,9,32,.95));
+  border: 1px solid rgba(155,93,229,.45);
+  border-radius: 24px;
+  padding: 52px 48px;
+  text-align: center;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 0 60px rgba(108,61,171,.25), 0 0 120px rgba(212,175,55,.08);
+  backdrop-filter: blur(12px);
+  position: relative;
+  overflow: hidden;
+}
+.login-gate-box::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(155,93,229,.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.login-gate-orb {
+  font-size: 4rem;
+  display: block;
+  margin-bottom: 20px;
+  animation: float 3.5s ease-in-out infinite;
+  filter: drop-shadow(0 0 22px rgba(155,93,229,.9))
+          drop-shadow(0 0 44px rgba(212,175,55,.4));
+}
+
+.login-gate-title {
+  font-family: 'Cinzel', serif;
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 14px;
+  background: linear-gradient(90deg, var(--gold), var(--purple-l));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  line-height: 1.4;
+}
+
+.login-gate-desc {
+  font-size: .92rem;
+  color: var(--text-dim);
+  line-height: 1.7;
+  margin-bottom: 36px;
+}
+
+/* 큰 Google 로그인 버튼 */
+.btn-google-lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  color: #3c4043;
+  border-radius: 12px;
+  padding: 14px 28px;
+  font-size: 1rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all .3s;
+  box-shadow: 0 4px 20px rgba(0,0,0,.4);
+  letter-spacing: .3px;
+  position: relative;
+  overflow: hidden;
+}
+.btn-google-lg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 0%, rgba(255,255,255,.3) 100%);
+  opacity: 0;
+  transition: opacity .3s;
+}
+.btn-google-lg:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+}
+.btn-google-lg:hover::after { opacity: 1; }
+.btn-google-lg:active { transform: translateY(-1px); }
+
 /* ── Responsive ── */
 @media(max-width:500px){
   :root{ --card-w:130px; --card-h:220px; }
   .logo { font-size:1.3rem; }
   .mode-card { padding:16px 20px; }
+  .login-gate-box { padding: 40px 24px; }
+  .login-gate-title { font-size: 1.1rem; }
 }

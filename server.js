@@ -127,8 +127,21 @@ app.get('/api/me', (req, res) => {
   });
 });
 
+// ── Auth Middleware ───────────────────────────────────────────
+function requireAuth(req, res, next) {
+  if (req.isAuthenticated()) return next();
+  const lang = req.body?.lang || 'ko';
+  const msgs = {
+    ko: '타로 리딩은 회원만 이용할 수 있어요. Google 로그인 후 이용해 주세요 🔮',
+    en: 'Tarot reading is available for members only. Please sign in with Google 🔮',
+    ja: 'タロット占いは会員限定です。Googleでサインインしてください 🔮',
+    zh: '塔罗解读仅限会员使用。请用Google登录 🔮',
+  };
+  return res.status(401).json({ error: msgs[lang] || msgs.ko });
+}
+
 // ── Tarot AI Reading ──────────────────────────────────────────
-app.post('/api/read', readLimiter, async (req, res) => {
+app.post('/api/read', requireAuth, readLimiter, async (req, res) => {
     const { mode, cards, question, lang } = req.body;
     if (!cards || !cards.length) return res.status(400).json({ error: 'cards required' });
 
