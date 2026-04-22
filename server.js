@@ -21,15 +21,19 @@ mongoose.connect(process.env.MONGODB_URI)
   .catch(err => console.error('❌ MongoDB 연결 실패:', err.message));
 
 // ── User 모델 ─────────────────────────────────────────────────
+// ── User 모델 ─────────────────────────────────────────────────
 const userSchema = new mongoose.Schema({
-  googleId:  { type: String, required: true, unique: true },
-  name:      String,
-  email:     String,
-  avatar:    String,
-  createdAt: { type: Date, default: Date.now },
-  lastLogin: { type: Date, default: Date.now },
+  googleId:    { type: String, required: true, unique: true },
+  name:        String,
+  email:       String,
+  avatar:      String,
+  createdAt:   { type: Date, default: Date.now },
+  lastLogin:   { type: Date, default: Date.now },
+  withdrawn:   { type: Boolean, default: false },  // 탈퇴 여부
+  withdrawnAt: { type: Date, default: null },       // 탈퇴 일시
 });
 const User = mongoose.model('User', userSchema);
+
 
 // ── Middleware ────────────────────────────────────────────────
 app.use(express.json());
@@ -52,11 +56,17 @@ passport.use(new GoogleStrategy({
   try {
     let user = await User.findOne({ googleId: profile.id });
     if (user) {
-      // 기존 유저 → 마지막 로그인 업데이트
+      // 탈퇴한 계정이면 로그인 거부
+      if (user.withdrawn) {
+        return done(null, false, { message: 'withdrawn' });
+      }
+      // 기존 유저 → 로그인 시 프로필 최신화
       user.lastLogin = new Date();
+      user.avatar    = profile.photos?.[0]?.value || user.avatar;
+      user.name      = profile.displayName || user.name;
       await user.save();
     } else {
-      // 신규 유저 → DB에 저장 (자동 가입)
+      // 신규 유저 → DB에 저장
       user = await User.create({
         googleId: profile.id,
         name:     profile.displayName,
@@ -108,9 +118,10 @@ app.get('/auth/google',
 );
 
 app.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/' }),
+  passport.authenticate('google', { failureRedirect: '/?withdrawn=1' }),
   (req, res) => res.redirect('/')
 );
+
 
 app.get('/logout', (req, res) => {
   req.logout(() => res.redirect('/'));
@@ -132,9 +143,17 @@ app.delete('/api/delete-account', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: '로그인이 필요합니다.' });
   try {
     const userId = req.user._id;
-    await User.findByIdAndDelete(userId);
+    // 계정 삭제 대신 탈퇴 표시 (같은 Google ID로 재가입 차단)
+    await User.findByIdAndUpdate(userId, {
+      withdrawn:   true,
+      withdrawnAt: new Date(),
+      name:        '[탈퇴한 회원]',
+    });
+    console.log(`🗑️ 회원탈퇴: ${req.user.name} (${req.user.email})`);
+    // 세션 완전 파기 + 로그아웃
     req.logout(() => {
       req.session.destroy(() => {
+        res.clearCookie('connect.sid');
         res.json({ success: true });
       });
     });
@@ -143,6 +162,7 @@ app.delete('/api/delete-account', async (req, res) => {
     res.status(500).json({ error: '탈퇴 처리 중 오류가 발생했습니다.' });
   }
 });
+
 
 // ── Auth Middleware ───────────────────────────────────────────
 function requireAuth(req, res, next) {

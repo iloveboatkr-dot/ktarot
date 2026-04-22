@@ -288,6 +288,21 @@ header {
   animation: pulse-stars 1.2s ease-in-out infinite;
 }
 
+/* ── 탈퇴 완료 안내 배너 ── */
+.withdrawn-notice {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: rgba(80,200,120,.1);
+  border: 1px solid rgba(80,200,120,.35);
+  border-radius: 12px;
+  padding: 14px 20px;
+  margin-bottom: 20px;
+  text-align: center;
+  animation: fadeUp .4s ease;
+}
+.withdrawn-notice .wn-icon { font-size: 1.6rem; }
+.withdrawn-notice strong { color: #88ffaa; font-size: .95rem; }
+.withdrawn-notice span { color: var(--text-dim); font-size: .82rem; }
+
 /* ── Hero ── */
 .hero {
   text-align: center;
