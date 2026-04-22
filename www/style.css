@@ -79,7 +79,7 @@ header {
 .btn-google-sm:hover { background: #f0f0f0; box-shadow: 0 4px 12px rgba(0,0,0,.4); transform: translateY(-1px); }
 
 /* ── 로그인 후 유저 배지 ── */
-.user-badge { display: flex; align-items: center; gap: 8px; }
+.user-badge { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .user-avatar { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--purple-l); object-fit: cover; }
 .user-name { font-size: .82rem; color: var(--gold-l); font-weight: 500; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn-logout-sm {
@@ -90,6 +90,98 @@ header {
   transition: all .2s;
 }
 .btn-logout-sm:hover { background: rgba(255,100,100,.1); }
+
+/* 회원탈퇴 버튼 (헤더) */
+.btn-withdraw-sm {
+  background: transparent;
+  border: 1px solid rgba(180,60,60,.35);
+  color: rgba(255,120,120,.6);
+  border-radius: 20px;
+  padding: 4px 10px; font-size: .72rem;
+  cursor: pointer; transition: all .2s;
+  font-family: inherit;
+}
+.btn-withdraw-sm:hover {
+  background: rgba(180,60,60,.15);
+  border-color: rgba(255,100,100,.6);
+  color: #ff8888;
+}
+
+/* ── 회원탈퇴 확인 모달 ── */
+#withdraw-modal {
+  display: none;
+  position: fixed; inset: 0; z-index: 9999;
+  align-items: center; justify-content: center;
+}
+#withdraw-modal.visible { display: flex; }
+
+.wm-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(5,2,15,.75);
+  backdrop-filter: blur(6px);
+}
+
+.wm-box {
+  position: relative; z-index: 1;
+  background: linear-gradient(135deg, #1e0d35, #120820);
+  border: 1px solid rgba(220,60,60,.4);
+  border-radius: 20px;
+  padding: 44px 40px;
+  max-width: 360px; width: 90%;
+  text-align: center;
+  box-shadow: 0 0 60px rgba(180,30,30,.25), 0 20px 60px rgba(0,0,0,.6);
+  animation: fadeUp .3s ease;
+}
+
+.wm-icon {
+  font-size: 2.8rem;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 0 12px rgba(255,150,50,.5));
+}
+
+.wm-title {
+  font-family: 'Cinzel', serif;
+  font-size: 1.15rem;
+  color: #ff9090;
+  margin-bottom: 14px;
+}
+
+.wm-desc {
+  font-size: .9rem;
+  color: var(--text-dim);
+  line-height: 1.7;
+  margin-bottom: 32px;
+}
+.wm-desc strong { color: #ffaaaa; }
+
+.wm-btns {
+  display: flex; gap: 12px; justify-content: center;
+}
+
+.wm-btn-cancel {
+  flex: 1;
+  background: transparent;
+  border: 1px solid rgba(155,93,229,.5);
+  color: var(--purple-l);
+  border-radius: 10px; padding: 11px 0;
+  font-size: .9rem; cursor: pointer;
+  transition: all .2s; font-family: inherit;
+}
+.wm-btn-cancel:hover { background: rgba(155,93,229,.15); }
+
+.wm-btn-confirm {
+  flex: 1;
+  background: linear-gradient(135deg, #7a1a1a, #5a0f0f);
+  border: 1px solid rgba(220,60,60,.5);
+  color: #ffaaaa;
+  border-radius: 10px; padding: 11px 0;
+  font-size: .9rem; cursor: pointer;
+  transition: all .2s; font-family: inherit;
+  font-weight: 600;
+}
+.wm-btn-confirm:hover { background: linear-gradient(135deg, #9a2020, #7a1010); box-shadow: 0 4px 16px rgba(180,30,30,.4); }
+.wm-btn-confirm:disabled { opacity: .5; cursor: not-allowed; }
+
 
 /* ── Hero ── */
 .hero {

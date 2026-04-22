@@ -592,8 +592,10 @@ fetch('/api/me')
           <img src="${user.avatar}" alt="${user.name}" class="user-avatar" onerror="this.style.display='none'">
           <span class="user-name">${user.name}</span>
           <a href="/logout" class="btn-logout-sm">로그아웃</a>
+          <button class="btn-withdraw-sm" onclick="showWithdrawModal()">회원탈퇴</button>
         </div>`;
       showTarotUI();
+      injectWithdrawModal();
     } else {
       // 헤더 로그인 버튼
       authArea.innerHTML = `
@@ -613,3 +615,55 @@ fetch('/api/me')
     // 네트워크 오류 시 안전하게 로그인 요구
     showLoginRequired();
   });
+
+// ── 회원탈퇴 모달 ─────────────────────────────────────────────
+function injectWithdrawModal() {
+  if (document.getElementById('withdraw-modal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'withdraw-modal';
+  modal.innerHTML = `
+    <div class="wm-backdrop" onclick="hideWithdrawModal()"></div>
+    <div class="wm-box">
+      <div class="wm-icon">⚠️</div>
+      <h3 class="wm-title">정말 탈퇴하시겠어요?</h3>
+      <p class="wm-desc">
+        탈퇴하면 계정 정보가 <strong>완전히 삭제</strong>되며<br>
+        복구할 수 없습니다.
+      </p>
+      <div class="wm-btns">
+        <button class="wm-btn-cancel" onclick="hideWithdrawModal()">취소</button>
+        <button class="wm-btn-confirm" onclick="deleteAccount()">탈퇴하기</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+function showWithdrawModal() {
+  const modal = document.getElementById('withdraw-modal');
+  if (modal) modal.classList.add('visible');
+}
+
+function hideWithdrawModal() {
+  const modal = document.getElementById('withdraw-modal');
+  if (modal) modal.classList.remove('visible');
+}
+
+async function deleteAccount() {
+  const confirmBtn = document.querySelector('.wm-btn-confirm');
+  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = '처리 중...'; }
+
+  try {
+    const res = await fetch('/api/delete-account', { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      // 탈퇴 완료 → 페이지 새로고침 (로그인 게이트 표시)
+      window.location.reload();
+    } else {
+      alert(data.error || '탈퇴 처리 중 오류가 발생했습니다.');
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '탈퇴하기'; }
+    }
+  } catch (e) {
+    alert('네트워크 오류가 발생했습니다. 다시 시도해 주세요.');
+    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '탈퇴하기'; }
+  }
+}

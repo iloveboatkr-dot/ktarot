@@ -127,6 +127,23 @@ app.get('/api/me', (req, res) => {
   });
 });
 
+// 회원탈퇴 API
+app.delete('/api/delete-account', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: '로그인이 필요합니다.' });
+  try {
+    const userId = req.user._id;
+    await User.findByIdAndDelete(userId);
+    req.logout(() => {
+      req.session.destroy(() => {
+        res.json({ success: true });
+      });
+    });
+  } catch (err) {
+    console.error('회원탈퇴 오류:', err);
+    res.status(500).json({ error: '탈퇴 처리 중 오류가 발생했습니다.' });
+  }
+});
+
 // ── Auth Middleware ───────────────────────────────────────────
 function requireAuth(req, res, next) {
   if (req.isAuthenticated()) return next();
