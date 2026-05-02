@@ -202,7 +202,7 @@ function requireAuth(req, res, next) {
 }
 
 // ── Tarot AI Reading ──────────────────────────────────────────
-app.post('/api/read', requireAuth, readLimiter, async (req, res) => {
+app.post('/api/read', readLimiter, async (req, res) => {
     const { mode, cards, question, lang } = req.body;
     if (!cards || !cards.length) return res.status(400).json({ error: 'cards required' });
 
