@@ -5,94 +5,15 @@ require('dotenv').config();
 
 const express        = require('express');
 const path           = require('path');
-const session        = require('express-session');
-const passport       = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const mongoose       = require('mongoose');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const rateLimit      = require('express-rate-limit');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-// ── MongoDB 연결 ───────────────────────────────────────────────
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('🍃 MongoDB 연결 성공'))
-  .catch(err => console.error('❌ MongoDB 연결 실패:', err.message));
-
-// ── User 모델 ─────────────────────────────────────────────────
-// ── User 모델 ─────────────────────────────────────────────────
-const userSchema = new mongoose.Schema({
-  googleId:    { type: String, required: true, unique: true },
-  name:        String,
-  email:       String,
-  avatar:      String,
-  createdAt:   { type: Date, default: Date.now },
-  lastLogin:   { type: Date, default: Date.now },
-  withdrawn:   { type: Boolean, default: false },  // 탈퇴 여부
-  withdrawnAt: { type: Date, default: null },       // 탈퇴 일시
-});
-const User = mongoose.model('User', userSchema);
-
-
 // ── Middleware ────────────────────────────────────────────────
 app.use(express.json());
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'ktarot-secret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 } // 7일
-}));
-app.use(passport.initialize());
-app.use(passport.session());
 app.use(express.static(path.join(__dirname, 'www')));
-
-// ── Passport Google OAuth ─────────────────────────────────────
-passport.use(new GoogleStrategy({
-  clientID:          process.env.GOOGLE_CLIENT_ID,
-  clientSecret:      process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL:       process.env.CALLBACK_URL,
-  passReqToCallback: true,   // req 접근 허용
-}, async (req, _accessToken, _refreshToken, profile, done) => {
-  try {
-    const mode = req.session.authMode || 'signup'; // 'login' 또는 'signup'
-    let user = await User.findOne({ googleId: profile.id });
-
-    if (user) {
-      // 기존 유저 → 로그인 시 프로필 최신화
-      user.lastLogin = new Date();
-      user.avatar    = profile.photos?.[0]?.value || user.avatar;
-      user.name      = profile.displayName || user.name;
-      await user.save();
-    } else if (mode === 'signup') {
-      // 회원가입 모드 → 신규 생성
-      user = await User.create({
-        googleId: profile.id,
-        name:     profile.displayName,
-        email:    profile.emails?.[0]?.value || '',
-        avatar:   profile.photos?.[0]?.value || '',
-      });
-      console.log(`✨ 신규 가입: ${user.name} (${user.email})`);
-    } else {
-      // 로그인 모드인데 계정 없음 → 거부
-      console.log(`⚠️ 로그인 실패 (계정 없음): ${profile.displayName}`);
-      return done(null, false);
-    }
-    return done(null, user);
-  } catch (err) {
-    return done(err);
-  }
-}));
-
-passport.serializeUser((user, done)   => done(null, user._id));
-passport.deserializeUser(async (id, done) => {
-  try {
-    const user = await User.findById(id);
-    done(null, user);
-  } catch (err) {
-    done(err);
-  }
-});
 
 // ── Gemini AI ─────────────────────────────────────────────────
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
@@ -114,92 +35,6 @@ const readLimiter = rateLimit({
         res.status(429).json({ error: msgs[lang] || msgs.ko });
     }
 });
-
-// ── Auth Routes ───────────────────────────────────────────────
-
-// 이메일로 회원 존재 여부 사전 확인 (로그인 전 DB 체크)
-app.get('/api/check-email', async (req, res) => {
-  try {
-    const { email } = req.query;
-    if (!email) return res.json({ exists: false });
-    const user = await User.findOne({ email: email.trim().toLowerCase() });
-    res.json({ exists: !!user });
-  } catch (err) {
-    res.json({ exists: false });
-  }
-});
-
-app.get('/auth/google', (req, res, next) => {
-  // mode 세션에 저장: 'login'(기존회원만) 또는 'signup'(신규가입)
-  req.session.authMode = req.query.mode || 'signup';
-  const opts = {
-    scope: ['profile', 'email'],
-    prompt: 'select_account',  // 항상 계정 선택 화면
-  };
-  // 이메일 힌트가 있으면 Google 화면에 자동 입력
-  if (req.query.hint) opts.loginHint = req.query.hint;
-  passport.authenticate('google', opts)(req, res, next);
-});
-
-app.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/?error=notfound' }),
-  (req, res) => {
-    req.session.authMode = null;
-    res.redirect('/');
-  }
-);
-
-
-app.get('/logout', (req, res) => {
-  req.logout(() => res.redirect('/'));
-});
-
-// 현재 유저 정보 API
-app.get('/api/me', (req, res) => {
-  if (!req.isAuthenticated()) return res.json({ loggedIn: false });
-  res.json({
-    loggedIn: true,
-    name:   req.user.name,
-    email:  req.user.email,
-    avatar: req.user.avatar,
-  });
-});
-
-// 회원탈퇴 API
-app.delete('/api/delete-account', async (req, res) => {
-  if (!req.isAuthenticated()) return res.status(401).json({ error: '로그인이 필요합니다.' });
-  try {
-    const userName  = req.user.name;
-    const userEmail = req.user.email;
-    // DB에서 즉시 삭제 (재가입 가능)
-    await User.findByIdAndDelete(req.user._id);
-    console.log(`🗑️ 회원탈퇴(삭제): ${userName} (${userEmail})`);
-    // 세션 완전 파기 + 로그아웃
-    req.logout(() => {
-      req.session.destroy(() => {
-        res.clearCookie('connect.sid');
-        res.json({ success: true });
-      });
-    });
-  } catch (err) {
-    console.error('회원탈퇴 오류:', err);
-    res.status(500).json({ error: '탈퇴 처리 중 오류가 발생했습니다.' });
-  }
-});
-
-
-// ── Auth Middleware ───────────────────────────────────────────
-function requireAuth(req, res, next) {
-  if (req.isAuthenticated()) return next();
-  const lang = req.body?.lang || 'ko';
-  const msgs = {
-    ko: '타로 리딩은 회원만 이용할 수 있어요. Google 로그인 후 이용해 주세요 🔮',
-    en: 'Tarot reading is available for members only. Please sign in with Google 🔮',
-    ja: 'タロット占いは会員限定です。Googleでサインインしてください 🔮',
-    zh: '塔罗解读仅限会员使用。请用Google登录 🔮',
-  };
-  return res.status(401).json({ error: msgs[lang] || msgs.ko });
-}
 
 // ── Tarot AI Reading ──────────────────────────────────────────
 app.post('/api/read', readLimiter, async (req, res) => {

@@ -16,9 +16,6 @@ const I18N = {
     today: '오늘의 카드',
     upright: '정방향', reversed: '역방향',
     clickCard: '카드를 클릭하세요',
-    loginRequired: '로그인 후 타로를 이용하실 수 있습니다',
-    loginDesc: '구글 계정으로 로그인하면 AI 타로 리딩을 무료로 이용할 수 있어요.',
-    loginBtn: 'Google로 로그인',
   },
   en: {
     subtitle: 'Let the stars illuminate your path',
@@ -36,9 +33,6 @@ const I18N = {
     today: "Today's Card",
     upright: 'Upright', reversed: 'Reversed',
     clickCard: 'Click the cards',
-    loginRequired: 'Sign in to use Tarot Reading',
-    loginDesc: 'Log in with your Google account to access free AI Tarot readings.',
-    loginBtn: 'Sign in with Google',
   },
   ja: {
     subtitle: '星々があなたの道を照らします',
@@ -56,9 +50,6 @@ const I18N = {
     today: '今日のカード',
     upright: '正位置', reversed: '逆位置',
     clickCard: 'カードをクリック',
-    loginRequired: 'タロットを利用するにはログインが必要です',
-    loginDesc: 'Googleアカウントでログインして、AIタロット占いを無料でご利用ください。',
-    loginBtn: 'Googleでログイン',
   },
   zh: {
     subtitle: '让星光照亮您的道路',
@@ -76,9 +67,6 @@ const I18N = {
     today: '今日牌',
     upright: '正位', reversed: '逆位',
     clickCard: '点击牌面',
-    loginRequired: '请登录后使用塔罗牌解读',
-    loginDesc: '使用Google账号登录，即可免费体验AI塔罗解读。',
-    loginBtn: '用Google登录',
   },
 };
 
@@ -87,7 +75,6 @@ let lang = 'ko';
 let mode = '1card';
 let drawnCards = [];
 let revealedCount = 0;
-let currentUser = null; // 로그인 상태 (비회원: null)
 
 // ── Client-side rate limit (mirrors server: 2회/3분) ──────────
 const CL_MAX    = 2;
@@ -511,268 +498,21 @@ document.getElementById('logo').addEventListener('click', () => {
 // Init
 applyLang();
 
-// ── Google 로그인 상태 & 접근 제어 ───────────────────────────
-const authArea = document.getElementById('auth-area');
+
 
 // 타로 UI 요소 모음
 const tarotUI = document.querySelector('.modes');
 const questionWrap = document.querySelector('.question-wrap');
 const drawBtnWrap = document.getElementById('btn-draw');
 
-// 로그인 필요 화면
-function showLoginRequired() {
-  const t = I18N[lang];
-  tarotUI.style.display = 'none';
-  questionWrap.style.display = 'none';
-  drawBtnWrap.style.display = 'none';
-  stage.innerHTML = '';
-  resultWrap.classList.remove('visible');
-
-  if (!document.getElementById('login-gate')) {
-    const gate = document.createElement('div');
-    gate.id = 'login-gate';
-
-    const googleSvg = `<svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-    </svg>`;
-
-    gate.innerHTML = `
-      <div class="login-gate-box">
-        <div class="login-gate-orb">🔮</div>
-        <h2 class="login-gate-title" id="lg-title">${t.loginRequired}</h2>
-        <p class="login-gate-desc" id="lg-desc">${t.loginDesc}</p>
-
-        <!-- ── 로그인 섹션 (이메일 먼저 확인) ── -->
-        <div class="lg-login-section">
-          <div class="lg-section-label">🔑 기존 회원 로그인</div>
-          <div class="lg-email-row">
-            <input type="email" id="lg-email" placeholder="가입한 이메일 주소" autocomplete="email" />
-            <button id="lg-login-btn" onclick="lgCheckAndLogin()">로그인</button>
-          </div>
-          <div id="lg-email-msg" class="lg-email-msg"></div>
-        </div>
-
-        <!-- ── 구분선 ── -->
-        <div class="lg-divider"><span>또는</span></div>
-
-        <!-- ── 회원가입 ── -->
-        <div class="lg-section-label">✨ 신규 회원가입</div>
-        <a href="/auth/google?mode=signup" class="btn-google-lg" id="lg-btn">
-          ${googleSvg}
-          <span>Google로 회원가입</span>
-        </a>
-      </div>`;
-
-    tarotUI.insertAdjacentElement('afterend', gate);
-
-    // 엔터키로 로그인
-    document.getElementById('lg-email').addEventListener('keydown', e => {
-      if (e.key === 'Enter') lgCheckAndLogin();
-    });
-  }
-}
-
-// 이메일 → DB 체크 → Google OAuth 로그인
-async function lgCheckAndLogin() {
-  const emailEl  = document.getElementById('lg-email');
-  const msgEl    = document.getElementById('lg-email-msg');
-  const loginBtn = document.getElementById('lg-login-btn');
-  const email = emailEl?.value.trim();
-
-  if (!email) {
-    if (msgEl) { msgEl.textContent = '이메일을 입력해 주세요.'; msgEl.className = 'lg-email-msg error'; }
-    return;
-  }
-
-  if (loginBtn) { loginBtn.disabled = true; loginBtn.textContent = '확인 중...'; }
-  if (msgEl)    { msgEl.textContent = ''; }
-
-  try {
-    const res  = await fetch(`/api/check-email?email=${encodeURIComponent(email)}`);
-    const data = await res.json();
-
-    if (data.exists) {
-      // DB에 계정 있음 → Google OAuth로 로그인 (이메일 힌트 포함)
-      if (msgEl) { msgEl.textContent = '계정을 확인했습니다. Google 로그인으로 이동합니다...'; msgEl.className = 'lg-email-msg success'; }
-      setTimeout(() => {
-        window.location.href = `/auth/google?mode=login&hint=${encodeURIComponent(email)}`;
-      }, 600);
-    } else {
-      // DB에 없음 → 가입 안내
-      if (msgEl) {
-        msgEl.innerHTML = '⚠️ 등록된 계정이 없습니다.<br><small>처음 방문하셨거나 탈퇴한 계정이면 <strong>회원가입</strong>을 해주세요.</small>';
-        msgEl.className = 'lg-email-msg error';
-      }
-      if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = '로그인'; }
-    }
-  } catch (e) {
-    if (msgEl) { msgEl.textContent = '네트워크 오류가 발생했습니다.'; msgEl.className = 'lg-email-msg error'; }
-    if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = '로그인'; }
-  }
-}
-
-
-
-
-// 언어 변경 시 로그인 게이트 텍스트도 업데이트
-const origApplyLang = applyLang;
-applyLang = function() {
-  origApplyLang();
-  const t = I18N[lang];
-  const lgTitle = document.getElementById('lg-title');
-  const lgDesc  = document.getElementById('lg-desc');
-  const lgBtn   = document.getElementById('lg-btn-text');
-  if (lgTitle) lgTitle.textContent = t.loginRequired;
-  if (lgDesc)  lgDesc.textContent  = t.loginDesc;
-  if (lgBtn)   lgBtn.textContent   = t.loginBtn;
-};
-
-// 타로 UI 표시 (로그인 후)
+// 타로 UI 표시 (비회원 기본)
 function showTarotUI() {
   tarotUI.style.display = '';
   questionWrap.style.display = '';
   drawBtnWrap.style.display = '';
-  const gate = document.getElementById('login-gate');
-  if (gate) gate.remove();
 }
 
 // 비회원 타로 열기
 showTarotUI();
 
-// ── 프로필 드롭다운 패널 ──────────────────────────────────────
-function injectProfilePanel(user) {
-  if (document.getElementById('profile-panel')) return;
-  const panel = document.createElement('div');
-  panel.id = 'profile-panel';
-  panel.innerHTML = `
-    <div class="pp-avatar-wrap">
-      <img src="${user.avatar}" alt="${user.name}" class="pp-avatar" onerror="this.style.display='none'">
-      <div class="pp-google-badge">
-        <svg width="14" height="14" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-        </svg>
-        Google 계정
-      </div>
-    </div>
-    <div class="pp-name">${user.name}</div>
-    <div class="pp-email">${user.email}</div>
-    <div class="pp-divider"></div>
-    <a href="/logout" class="pp-btn-logout">
-      <span>🚪</span> 로그아웃
-    </a>
-    <button class="pp-btn-withdraw" onclick="hideProfilePanel(); showWithdrawModal();">
-      <span>⚠️</span> 회원탈퇴
-    </button>`;
-  // 헤더 auth-area 바로 아래에 삽입
-  document.getElementById('auth-area').style.position = 'relative';
-  document.getElementById('auth-area').appendChild(panel);
 
-  // 외부 클릭 시 닫기
-  document.addEventListener('click', (e) => {
-    const trigger = document.getElementById('profile-trigger');
-    const pp = document.getElementById('profile-panel');
-    if (pp && trigger && !trigger.contains(e.target) && !pp.contains(e.target)) {
-      hideProfilePanel();
-    }
-  });
-}
-
-function toggleProfilePanel() {
-  const panel = document.getElementById('profile-panel');
-  const chevron = document.querySelector('.profile-chevron');
-  if (!panel) return;
-  const isOpen = panel.classList.toggle('open');
-  if (chevron) chevron.textContent = isOpen ? '▴' : '▾';
-}
-
-function hideProfilePanel() {
-  const panel = document.getElementById('profile-panel');
-  const chevron = document.querySelector('.profile-chevron');
-  if (panel) panel.classList.remove('open');
-  if (chevron) chevron.textContent = '▾';
-}
-
-// ── 회원탈퇴 모달 ─────────────────────────────────────────────
-function injectWithdrawModal() {
-  if (document.getElementById('withdraw-modal')) return;
-  const modal = document.createElement('div');
-  modal.id = 'withdraw-modal';
-  modal.innerHTML = `
-    <div class="wm-backdrop" onclick="hideWithdrawModal()"></div>
-    <div class="wm-box">
-      <div class="wm-icon">⚠️</div>
-      <h3 class="wm-title">정말 탈퇴하시겠어요?</h3>
-      <p class="wm-desc">
-        탈퇴하면 계정 정보가 <strong>완전히 삭제</strong>되며<br>
-        복구할 수 없습니다.
-      </p>
-      <div class="wm-btns">
-        <button class="wm-btn-cancel" onclick="hideWithdrawModal()">취소</button>
-        <button class="wm-btn-confirm" onclick="deleteAccount()">탈퇴하기</button>
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-}
-
-function showWithdrawModal() {
-  const modal = document.getElementById('withdraw-modal');
-  if (modal) modal.classList.add('visible');
-}
-
-function hideWithdrawModal() {
-  const modal = document.getElementById('withdraw-modal');
-  if (modal) modal.classList.remove('visible');
-}
-
-async function deleteAccount() {
-  const confirmBtn = document.querySelector('.wm-btn-confirm');
-  const cancelBtn  = document.querySelector('.wm-btn-cancel');
-  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = '처리 중...'; }
-  if (cancelBtn)  { cancelBtn.style.display = 'none'; }
-
-  try {
-    const res  = await fetch('/api/delete-account', { method: 'DELETE' });
-    const data = await res.json();
-
-    if (data.success) {
-      // ── 탈퇴 완료 화면으로 모달 내용 교체 ──
-      const box = document.querySelector('.wm-box');
-      if (box) {
-        box.innerHTML = `
-          <div class="wm-success-icon">✅</div>
-          <h3 class="wm-title" style="color:#88ffaa">탈퇴가 완료되었습니다</h3>
-          <p class="wm-desc">
-            계정 정보가 <strong style="color:#aaffcc">완전히 삭제</strong>되었습니다.<br>
-            KTarot를 이용해 주셔서 감사합니다 🔮
-          </p>
-          <p class="wm-countdown" id="wm-count">3초 후 자동으로 이동합니다...</p>`;
-      }
-      // 3초 카운트다운 후 이동
-      let sec = 3;
-      const timer = setInterval(() => {
-        sec--;
-        const el = document.getElementById('wm-count');
-        if (el) el.textContent = `${sec}초 후 자동으로 이동합니다...`;
-        if (sec <= 0) {
-          clearInterval(timer);
-          window.location.href = '/';
-        }
-      }, 1000);
-
-    } else {
-      alert(data.error || '탈퇴 처리 중 오류가 발생했습니다.');
-      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '탈퇴하기'; }
-      if (cancelBtn)  { cancelBtn.style.display = ''; }
-    }
-  } catch (e) {
-    alert('네트워크 오류가 발생했습니다. 다시 시도해 주세요.');
-    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '탈퇴하기'; }
-    if (cancelBtn)  { cancelBtn.style.display = ''; }
-  }
-}
