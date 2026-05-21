@@ -4,7 +4,9 @@ require('dns').setServers(['8.8.8.8', '8.8.4.4']);
 require('dotenv').config();
 
 const express        = require('express');
+const fs             = require('fs');
 const path           = require('path');
+const vm             = require('vm');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const rateLimit      = require('express-rate-limit');
 
@@ -12,6 +14,7 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Middleware ────────────────────────────────────────────────
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'www')));
 
@@ -26,47 +29,122 @@ function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function loadTarotCards() {
+    try {
+        const tarotData = fs.readFileSync(path.join(__dirname, 'www', 'tarot_data.js'), 'utf8');
+        return vm.runInNewContext(`${tarotData}\nTAROT_CARDS;`, {});
+    } catch (err) {
+        console.warn(`[Tarot Data] failed to load card catalog: ${err.message}`);
+        return [];
+    }
+}
+
+const TAROT_CARDS = loadTarotCards();
+
+function normalizeCardName(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function findCardInfo(cardName) {
+    const target = normalizeCardName(cardName);
+    return TAROT_CARDS.find(card =>
+        Object.values(card.name || {}).some(name => normalizeCardName(name) === target)
+    );
+}
+
+function getCardKeywords(card, lang) {
+    const info = findCardInfo(card.name);
+    return info?.keywords?.[lang] || info?.keywords?.ko || '';
+}
+
+function getCardTheme(card, lang) {
+    const keywords = getCardKeywords(card, lang);
+    if (lang !== 'ko') return keywords || 'intuition, reflection, direction';
+
+    if (/컵|사랑|감정|공감|돌봄|직관|행복|상실|추억|만족|낭만/.test(`${card.name} ${keywords}`)) {
+        return '감정과 관계, 마음의 회복, 직관적인 판단';
+    }
+    if (/소드|명확|진실|갈등|불안|결정|분석|상처|생각/.test(`${card.name} ${keywords}`)) {
+        return '생각의 정리, 대화, 판단, 불안에서 벗어나는 선택';
+    }
+    if (/완드|열정|창의|행동|도전|승리|리더십|속도/.test(`${card.name} ${keywords}`)) {
+        return '행동력, 도전, 추진력, 새로운 가능성';
+    }
+    if (/펜타클|기회|번영|균형|노력|성공|실용|책임|풍요/.test(`${card.name} ${keywords}`)) {
+        return '현실적인 성과, 돈과 일, 안정, 꾸준한 관리';
+    }
+    return '삶의 큰 흐름, 내면의 전환, 지금 필요한 태도';
+}
+
+function sanitizeGeminiError(err) {
+    const raw = String(err?.message || err || 'unknown error');
+    const redacted = raw
+        .replace(/api_key:[A-Za-z0-9_-]+/g, 'api_key:[redacted]')
+        .replace(/AIza[0-9A-Za-z_-]+/g, '[redacted-google-api-key]');
+    if (redacted.includes('CONSUMER_SUSPENDED') || redacted.includes('has been suspended')) {
+        return 'Gemini API key consumer is suspended';
+    }
+    if (redacted.includes('403') || redacted.includes('Forbidden')) {
+        return 'Gemini API permission denied';
+    }
+    if (redacted.includes('429') || redacted.includes('quota')) {
+        return 'Gemini API quota or rate limit reached';
+    }
+    if (redacted.includes('404') || redacted.includes('not found')) {
+        return 'Gemini model is unavailable';
+    }
+    return redacted.slice(0, 300);
+}
+
 function createFallbackReading({ mode, cards, question, lang, pl, lbl }) {
     if (lang !== 'ko') {
         const cardSummary = cards
             .map((card, index) => {
                 const label = mode === '3card' ? [pl.past, pl.present, pl.future][index] : pl.today;
-                return `- **${label}: ${card.name}** (${card.reversed ? pl.reversed : pl.upright})`;
+                const keywords = getCardKeywords(card, lang);
+                return `### ${label}: **${card.name}** (${card.reversed ? pl.reversed : pl.upright})
+
+Keywords: ${keywords || getCardTheme(card, lang)}
+
+This card asks you to slow down and read the emotional weather around the question, not only the visible facts. In this position, ${card.name} points to the part of the situation that is asking for attention now. If the card is upright, its energy can be used directly; if it is reversed, it may be showing a lesson that is blocked, delayed, or being avoided. Look at where your choices are coming from: fear, habit, hope, or genuine clarity.`;
             })
-            .join('\n');
+            .join('\n\n');
 
         return `## ${lbl.s1}
 
 ${cardSummary}
 
-The AI reading service is temporarily unavailable, so this is a concise backup reading based on the selected cards. Treat the card as a mirror rather than a fixed prediction. If the card is upright, its energy is easier to express today; if reversed, the same lesson may need patience, honesty, and a slower pace.
-
 ## ${lbl.s2}
 
 Your question was: ${question || 'No specific question was entered.'}
 
-The cards suggest that today is asking you to pause, notice what your intuition already knows, and choose one practical next step instead of forcing a perfect answer.
+The cards suggest that the answer is not simply yes or no. They are describing a process: what you are feeling, what needs to be acknowledged, and what kind of action would keep you aligned. If this is about love, choose honesty over guessing. If this is about work or money, reduce the decision to one practical next step. If this is about your inner state, trust the quiet signal that keeps returning.
 
 ## ${lbl.s3}
 
-Move gently, but do not ignore what you feel. A small decision made with clarity is more useful than a large decision made from anxiety.
+The central message is to move with emotional intelligence instead of urgency. You do not need to solve the whole future today, but you do need to stop ignoring the part of you that already knows what feels right. Choose one action that makes the situation clearer. A small decision made with calm awareness will help more than a dramatic move made from pressure.
 
 ## ${lbl.s4}
 
-Write down one thing you can do within the next 24 hours, and do only that first.`;
+1. Write one sentence that names what you truly want from this situation.
+2. Take one small action within 24 hours that supports that sentence.`;
     }
 
     const cardDetails = cards
         .map((card, index) => {
             const label = mode === '3card' ? [pl.past, pl.present, pl.future][index] : pl.today;
             const direction = card.reversed ? pl.reversed : pl.upright;
+            const keywords = getCardKeywords(card, lang);
+            const theme = getCardTheme(card, lang);
             const tone = card.reversed
-                ? '이 카드는 에너지가 막혀 있거나 아직 마음속에서 정리되지 않은 부분을 보여줍니다.'
-                : '이 카드는 지금 자연스럽게 흘러나오는 힘과 가능성을 보여줍니다.';
+                ? '역방향으로 나온 이 카드는 본래의 힘이 아직 자연스럽게 흐르지 못하고 있음을 보여줍니다.'
+                : '정방향으로 나온 이 카드는 지금 사용할 수 있는 힘과 가능성이 비교적 분명하게 열려 있음을 보여줍니다.';
 
-            return `**${label} - ${card.name} (${direction})**
+            return `### ${label} - **${card.name}** (${direction})
 
-${tone} 지금의 질문에서 중요한 것은 서두르는 결론보다 내 마음이 어떤 방향을 가리키는지 차분히 확인하는 것입니다. ${card.name} 카드는 감정, 선택, 관계, 일의 흐름 중에서 이미 알고 있었지만 미뤄둔 신호를 다시 보라고 말합니다. 오늘은 큰 결정을 억지로 밀어붙이기보다, 작은 행동 하나를 통해 상황을 확인하는 편이 좋습니다.`;
+핵심 키워드: ${keywords || theme}
+
+${tone} 이 카드가 건드리는 주제는 **${theme}**입니다. 지금 질문에서 ${card.name} 카드는 겉으로 드러난 사건보다 그 밑에 깔린 마음의 방향을 보라고 말합니다. 누군가와의 관계라면 상대의 말보다 반복되는 태도와 내 감정의 반응을 함께 보아야 합니다. 일이나 돈의 문제라면 당장 큰 결론을 내기보다, 내가 통제할 수 있는 범위와 기다려야 하는 범위를 구분하는 것이 중요합니다. 내면의 문제라면 스스로를 몰아붙이는 방식이 답을 흐리게 만들 수 있으니, 오늘은 판단보다 관찰이 먼저입니다.`;
         })
         .join('\n\n');
 
@@ -78,18 +156,17 @@ ${cardDetails}
 
 질문: ${question || '별도의 질문 없이 오늘의 흐름을 물었습니다.'}
 
-이번 카드의 흐름은 “지금 내가 통제하려는 것”과 “조용히 받아들여야 하는 것”을 구분하라는 메시지에 가깝습니다. 상황이 바로 움직이지 않더라도, 오늘의 작은 판단과 태도가 다음 흐름을 만듭니다. 특히 마음이 급해질수록 처음 질문으로 돌아가서 정말 원하는 결과가 무엇인지 확인해 보세요.
+이번 리딩의 핵심은 “감정은 신호이고, 행동은 선택”이라는 메시지입니다. 마음이 흔들릴수록 바로 결론을 내리려 하기 쉽지만, 카드는 먼저 상황을 읽는 감각을 회복하라고 말합니다. 지금 필요한 것은 더 많은 걱정이 아니라 더 선명한 기준입니다. 내가 원하는 것, 상대나 상황이 실제로 보여주는 것, 오늘 현실적으로 할 수 있는 일을 분리해 보면 흐름이 훨씬 또렷해집니다.
 
 ## ${lbl.s3}
 
-오늘의 조언은 단순합니다. 완벽한 답을 찾으려 하기보다 지금 할 수 있는 가장 현실적인 행동을 하나 고르세요. 관계의 문제라면 먼저 듣고, 일의 문제라면 우선순위를 줄이고, 마음의 문제라면 스스로를 몰아붙이는 말을 멈추는 것이 좋습니다. 카드는 미래를 고정하지 않습니다. 대신 지금 선택할 수 있는 태도와 방향을 비춰줍니다.
+종합 메시지는 조급함을 내려놓고, 내가 지킬 수 있는 중심을 먼저 세우라는 것입니다. 관계의 문제라면 상대를 바꾸려 하기 전에 내 마음이 원하는 안정감과 존중이 무엇인지 확인하세요. 일의 문제라면 가능성만 보지 말고 시간, 비용, 책임, 반복 가능한 실행까지 함께 보아야 합니다. 마음의 문제라면 지금 느끼는 불안이 예감인지 습관인지 구분하는 시간이 필요합니다. 카드가 말하는 좋은 흐름은 극적인 반전보다, 오늘의 작은 선택이 내일의 불안을 줄이는 방향에 가깝습니다.
 
 ## ${lbl.s4}
 
-1. 오늘 안에 할 수 있는 작은 행동 하나를 정하고 바로 실행해 보세요.
-2. 결정을 미루고 있다면, 두려움 때문인지 준비가 더 필요한 것인지 조용히 구분해 보세요.
-
-_AI 해석 서버가 잠시 불안정해서 기본 카드 해석으로 안내했어요. 잠시 후 다시 뽑으면 더 자세한 AI 리딩을 받을 수 있습니다._`;
+1. 오늘 안에 할 수 있는 행동을 하나만 정하세요. 연락하기, 정리하기, 확인하기, 쉬기 중 하나면 충분합니다.
+2. 결정을 미루고 있다면 “두려워서 미루는 것인지, 정보가 부족해서 기다리는 것인지”를 적어보세요.
+3. 마음이 복잡할수록 말과 행동을 크게 만들지 말고, 작고 정확한 선택을 하세요.`;
 }
 
 // ── Rate Limiter ──────────────────────────────────────────────
@@ -211,7 +288,7 @@ REMINDER: Write ONLY in ${langName}. Minimum 1500 characters of meaningful conte
                     throw new Error('Gemini returned an empty reading');
                 } catch (err) {
                     lastErr = err;
-                    console.warn(`[AI Read] ${modelName} attempt ${attempt} failed: ${err.message}`);
+                    console.warn(`[AI Read] ${modelName} attempt ${attempt} failed: ${sanitizeGeminiError(err)}`);
                     if (attempt < MAX_RETRY) {
                         await wait(1200);
                     }
@@ -223,7 +300,7 @@ REMINDER: Write ONLY in ${langName}. Minimum 1500 characters of meaningful conte
         console.warn('[AI Read] GEMINI_API_KEY is missing. Using fallback reading.');
     }
 
-    console.warn(`[AI Read] using fallback reading: ${lastErr?.message || 'unknown error'}`);
+    console.warn(`[AI Read] using fallback reading: ${sanitizeGeminiError(lastErr)}`);
     return res.json({
         success: true,
         fallback: true,
