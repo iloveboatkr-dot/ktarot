@@ -1,25 +1,10 @@
 'use strict';
-// DNS 우회 (공유기가 SRV 쿼리 차단 방지)
-require('dns').setServers(['8.8.8.8', '8.8.4.4']);
-require('dotenv').config();
 
-const express        = require('express');
-const fs             = require('fs');
-const path           = require('path');
-const vm             = require('vm');
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const rateLimit      = require('express-rate-limit');
 
-const app  = express();
-const PORT = process.env.PORT || 3000;
-const STATIC_DIR = fs.existsSync(path.join(__dirname, 'public')) ? 'public' : 'www';
-
-// ── Middleware ────────────────────────────────────────────────
-app.set('trust proxy', 1);
-app.use(express.json());
-app.use(express.static(path.join(__dirname, STATIC_DIR)));
-
-// ── Gemini AI ─────────────────────────────────────────────────
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 const GEMINI_MODELS = (process.env.GEMINI_MODEL || 'gemini-2.5-flash,gemini-2.0-flash,gemini-1.5-flash')
     .split(',')
@@ -32,7 +17,8 @@ function wait(ms) {
 
 function loadTarotCards() {
     try {
-        const tarotData = fs.readFileSync(path.join(__dirname, STATIC_DIR, 'tarot_data.js'), 'utf8');
+        const staticDir = fs.existsSync(path.join(process.cwd(), 'public')) ? 'public' : 'www';
+        const tarotData = fs.readFileSync(path.join(process.cwd(), staticDir, 'tarot_data.js'), 'utf8');
         return vm.runInNewContext(`${tarotData}\nTAROT_CARDS;`, {});
     } catch (err) {
         console.warn(`[Tarot Data] failed to load card catalog: ${err.message}`);
@@ -170,31 +156,34 @@ ${cardDetails}
 3. 마음이 복잡할수록 말과 행동을 크게 만들지 말고, 작고 정확한 선택을 하세요.`;
 }
 
-// ── Rate Limiter ──────────────────────────────────────────────
-const readLimiter = rateLimit({
-    windowMs: 3 * 60 * 1000,
-    max: 2,
-    standardHeaders: true,
-    legacyHeaders: false,
-    handler: (req, res) => {
-        const lang = req.body?.lang || 'ko';
-        const msgs = {
-            ko: '잠시 쉬어가세요 🌙 3분에 2번까지만 카드를 뽑을 수 있어요.',
-            en: 'Take a breath 🌙 You can draw cards 2 times per 3 minutes.',
-            ja: '少し休みましょう 🌙 3分間に2回までカードを引けます。',
-            zh: '休息一下 🌙 每3分钟最多可以抽2次牌。',
-        };
-        res.status(429).json({ error: msgs[lang] || msgs.ko });
-    }
-});
+async function readBody(req) {
+    if (req.body) return req.body;
 
-// ── Tarot AI Reading ──────────────────────────────────────────
-app.post('/api/read', readLimiter, async (req, res) => {
-    const { mode, cards, question, lang } = req.body;
+    const chunks = [];
+    for await (const chunk of req) {
+        chunks.push(chunk);
+    }
+    if (!chunks.length) return {};
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
+module.exports = async function handler(req, res) {
+    if (req.method !== 'POST') {
+        res.setHeader('Allow', 'POST');
+        return res.status(405).json({ error: 'method not allowed' });
+    }
+
+    let body;
+    try {
+        body = await readBody(req);
+    } catch {
+        return res.status(400).json({ error: 'invalid json' });
+    }
+
+    const { mode, cards, question, lang = 'ko' } = body;
     if (!cards || !cards.length) return res.status(400).json({ error: 'cards required' });
 
     const langName = { ko: '한국어', en: 'English', ja: '日本語', zh: '中文' }[lang] || '한국어';
-
     const posLabels = {
         ko: { past:'과거', present:'현재', future:'미래', today:'오늘의 카드', upright:'정방향', reversed:'역방향' },
         en: { past:'Past', present:'Present', future:'Future', today:"Today's Card", upright:'Upright', reversed:'Reversed' },
@@ -203,14 +192,9 @@ app.post('/api/read', readLimiter, async (req, res) => {
     };
     const pl = posLabels[lang] || posLabels.ko;
 
-    let cardLines;
-    if (mode === '3card') {
-        cardLines = cards.map((c, i) =>
-            `${[pl.past, pl.present, pl.future][i]}: ${c.name} (${c.reversed ? pl.reversed : pl.upright})`
-        ).join('\n');
-    } else {
-        cardLines = `${pl.today}: ${cards[0].name} (${cards[0].reversed ? pl.reversed : pl.upright})`;
-    }
+    const cardLines = mode === '3card'
+        ? cards.map((c, i) => `${[pl.past, pl.present, pl.future][i]}: ${c.name} (${c.reversed ? pl.reversed : pl.upright})`).join('\n')
+        : `${pl.today}: ${cards[0].name} (${cards[0].reversed ? pl.reversed : pl.upright})`;
 
     const lbl = {
         ko: { s1:'🃏 카드 해석', s2:'🌊 카드의 흐름', s3:'✨ 종합 메시지와 조언', s4:'💡 오늘의 실천 팁' },
@@ -284,15 +268,13 @@ REMINDER: Write ONLY in ${langName}. Minimum 1500 characters of meaningful conte
                     const result = await model.generateContent(prompt);
                     const text = result.response.text();
                     if (text && text.trim()) {
-                        return res.json({ success: true, reading: text, model: modelName });
+                        return res.status(200).json({ success: true, reading: text, model: modelName });
                     }
                     throw new Error('Gemini returned an empty reading');
                 } catch (err) {
                     lastErr = err;
                     console.warn(`[AI Read] ${modelName} attempt ${attempt} failed: ${sanitizeGeminiError(err)}`);
-                    if (attempt < MAX_RETRY) {
-                        await wait(1200);
-                    }
+                    if (attempt < MAX_RETRY) await wait(1200);
                 }
             }
         }
@@ -302,16 +284,9 @@ REMINDER: Write ONLY in ${langName}. Minimum 1500 characters of meaningful conte
     }
 
     console.warn(`[AI Read] using fallback reading: ${sanitizeGeminiError(lastErr)}`);
-    return res.json({
+    return res.status(200).json({
         success: true,
         fallback: true,
         reading: createFallbackReading({ mode, cards, question, lang, pl, lbl })
     });
-});
-
-// ── SPA fallback ──────────────────────────────────────────────
-app.get('*', (_req, res) => {
-    res.sendFile(path.join(__dirname, STATIC_DIR, 'index.html'));
-});
-
-app.listen(PORT, () => console.log(`🔮 KTarot running → http://localhost:${PORT}`));
+};
