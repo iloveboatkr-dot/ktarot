@@ -17,6 +17,80 @@ app.use(express.static(path.join(__dirname, 'www')));
 
 // ── Gemini AI ─────────────────────────────────────────────────
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const GEMINI_MODELS = (process.env.GEMINI_MODEL || 'gemini-2.5-flash,gemini-2.0-flash,gemini-1.5-flash')
+    .split(',')
+    .map(model => model.trim())
+    .filter(Boolean);
+
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function createFallbackReading({ mode, cards, question, lang, pl, lbl }) {
+    if (lang !== 'ko') {
+        const cardSummary = cards
+            .map((card, index) => {
+                const label = mode === '3card' ? [pl.past, pl.present, pl.future][index] : pl.today;
+                return `- **${label}: ${card.name}** (${card.reversed ? pl.reversed : pl.upright})`;
+            })
+            .join('\n');
+
+        return `## ${lbl.s1}
+
+${cardSummary}
+
+The AI reading service is temporarily unavailable, so this is a concise backup reading based on the selected cards. Treat the card as a mirror rather than a fixed prediction. If the card is upright, its energy is easier to express today; if reversed, the same lesson may need patience, honesty, and a slower pace.
+
+## ${lbl.s2}
+
+Your question was: ${question || 'No specific question was entered.'}
+
+The cards suggest that today is asking you to pause, notice what your intuition already knows, and choose one practical next step instead of forcing a perfect answer.
+
+## ${lbl.s3}
+
+Move gently, but do not ignore what you feel. A small decision made with clarity is more useful than a large decision made from anxiety.
+
+## ${lbl.s4}
+
+Write down one thing you can do within the next 24 hours, and do only that first.`;
+    }
+
+    const cardDetails = cards
+        .map((card, index) => {
+            const label = mode === '3card' ? [pl.past, pl.present, pl.future][index] : pl.today;
+            const direction = card.reversed ? pl.reversed : pl.upright;
+            const tone = card.reversed
+                ? '이 카드는 에너지가 막혀 있거나 아직 마음속에서 정리되지 않은 부분을 보여줍니다.'
+                : '이 카드는 지금 자연스럽게 흘러나오는 힘과 가능성을 보여줍니다.';
+
+            return `**${label} - ${card.name} (${direction})**
+
+${tone} 지금의 질문에서 중요한 것은 서두르는 결론보다 내 마음이 어떤 방향을 가리키는지 차분히 확인하는 것입니다. ${card.name} 카드는 감정, 선택, 관계, 일의 흐름 중에서 이미 알고 있었지만 미뤄둔 신호를 다시 보라고 말합니다. 오늘은 큰 결정을 억지로 밀어붙이기보다, 작은 행동 하나를 통해 상황을 확인하는 편이 좋습니다.`;
+        })
+        .join('\n\n');
+
+    return `## ${lbl.s1}
+
+${cardDetails}
+
+## ${lbl.s2}
+
+질문: ${question || '별도의 질문 없이 오늘의 흐름을 물었습니다.'}
+
+이번 카드의 흐름은 “지금 내가 통제하려는 것”과 “조용히 받아들여야 하는 것”을 구분하라는 메시지에 가깝습니다. 상황이 바로 움직이지 않더라도, 오늘의 작은 판단과 태도가 다음 흐름을 만듭니다. 특히 마음이 급해질수록 처음 질문으로 돌아가서 정말 원하는 결과가 무엇인지 확인해 보세요.
+
+## ${lbl.s3}
+
+오늘의 조언은 단순합니다. 완벽한 답을 찾으려 하기보다 지금 할 수 있는 가장 현실적인 행동을 하나 고르세요. 관계의 문제라면 먼저 듣고, 일의 문제라면 우선순위를 줄이고, 마음의 문제라면 스스로를 몰아붙이는 말을 멈추는 것이 좋습니다. 카드는 미래를 고정하지 않습니다. 대신 지금 선택할 수 있는 태도와 방향을 비춰줍니다.
+
+## ${lbl.s4}
+
+1. 오늘 안에 할 수 있는 작은 행동 하나를 정하고 바로 실행해 보세요.
+2. 결정을 미루고 있다면, 두려움 때문인지 준비가 더 필요한 것인지 조용히 구분해 보세요.
+
+_AI 해석 서버가 잠시 불안정해서 기본 카드 해석으로 안내했어요. 잠시 후 다시 뽑으면 더 자세한 AI 리딩을 받을 수 있습니다._`;
+}
 
 // ── Rate Limiter ──────────────────────────────────────────────
 const readLimiter = rateLimit({
@@ -119,34 +193,42 @@ REMINDER: Write ONLY in ${langName}. Minimum 1500 characters of meaningful conte
 
     const MAX_RETRY = 2;
     let lastErr;
-    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
-        try {
-            const model = genAI.getGenerativeModel({
-                model: 'gemini-2.5-flash',
-                systemInstruction: systemRole,
-                generationConfig: { maxOutputTokens: 8192, temperature: 0.9 }
-            });
-            const result = await model.generateContent(prompt);
-            const text = result.response.text();
-            return res.json({ success: true, reading: text });
-        } catch (err) {
-            lastErr = err;
-            const is500 = err.message?.includes('500') || err.message?.includes('Internal Server Error');
-            console.warn(`[AI Read] attempt ${attempt} failed: ${err.message}`);
-            if (is500 && attempt < MAX_RETRY) {
-                await new Promise(r => setTimeout(r, 1500));
-                continue;
+
+    if (process.env.GEMINI_API_KEY) {
+        for (const modelName of GEMINI_MODELS) {
+            for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+                try {
+                    const model = genAI.getGenerativeModel({
+                        model: modelName,
+                        systemInstruction: systemRole,
+                        generationConfig: { maxOutputTokens: 8192, temperature: 0.9 }
+                    });
+                    const result = await model.generateContent(prompt);
+                    const text = result.response.text();
+                    if (text && text.trim()) {
+                        return res.json({ success: true, reading: text, model: modelName });
+                    }
+                    throw new Error('Gemini returned an empty reading');
+                } catch (err) {
+                    lastErr = err;
+                    console.warn(`[AI Read] ${modelName} attempt ${attempt} failed: ${err.message}`);
+                    if (attempt < MAX_RETRY) {
+                        await wait(1200);
+                    }
+                }
             }
-            break;
         }
+    } else {
+        lastErr = new Error('GEMINI_API_KEY is missing');
+        console.warn('[AI Read] GEMINI_API_KEY is missing. Using fallback reading.');
     }
-    const errMsgs = {
-        ko: '카드 해석 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요 🌙',
-        en: 'An error occurred during reading. Please try again in a moment 🌙',
-        ja: '解読中にエラーが発生しました。しばらくしてからもう一度お試しください 🌙',
-        zh: '解读过程中出现错误，请稍后再试 🌙',
-    };
-    res.status(500).json({ error: errMsgs[lang] || errMsgs.ko });
+
+    console.warn(`[AI Read] using fallback reading: ${lastErr?.message || 'unknown error'}`);
+    return res.json({
+        success: true,
+        fallback: true,
+        reading: createFallbackReading({ mode, cards, question, lang, pl, lbl })
+    });
 });
 
 // ── SPA fallback ──────────────────────────────────────────────
